@@ -68,13 +68,16 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Scripts\Barrier.cs" />
     <Compile Include="Assets\Scripts\Controllers\GameController.cs" />
     <Compile Include="Assets\Scripts\Controllers\PlayerController.cs" />
     <Compile Include="Assets\Scripts\KUtils.cs" />
+    <Compile Include="Assets\Scripts\MainMenu.cs" />
     <Compile Include="Assets\Scripts\MazeFloor.cs" />
     <Compile Include="Assets\Scripts\MazeGameException.cs" />
     <Compile Include="Assets\Scripts\MazeGenerator.cs" />
     <Compile Include="Assets\Scripts\MazeNode.cs" />
+    <Compile Include="Assets\Scripts\MazePath.cs" />
     <Compile Include="Assets\Scripts\MazeWall.cs" />
     <Compile Include="Assets\Scripts\PathArrow.cs" />
   </ItemGroup>

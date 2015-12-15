@@ -4,6 +4,7 @@ using System.Collections;
 public class PathArrow : MonoBehaviour {
     
     public MazeNode Parent;
+    public GameController gameController;
     Rigidbody rigid;
     Vector3 currentDirection = new Vector3(0,0,1);
 
@@ -31,7 +32,7 @@ public class PathArrow : MonoBehaviour {
             rigid = gameObject.GetComponent<Rigidbody>();
             foreach (var rend in gameObject.GetComponentsInChildren<MeshRenderer>())
                 rend.enabled = true;
-            Vector3 other = new Vector3(previous.Position.x*5+2.5f,transform.position.y,previous.Position.y*5+2.5f)-transform.position;
+            Vector3 other = gameController.ToGameBoard(previous.Position)-transform.position + new Vector3(0,transform.position.y,0);
             Quaternion rot = Quaternion.LookRotation(other);
             rigid.MoveRotation(rot);
         }

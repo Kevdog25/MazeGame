@@ -8,6 +8,7 @@ public class PlayerController : MonoBehaviour {
 	public float Speed;
 	public float JumpSpeed;
 	public float FallSpeed;
+    public bool Paused = true;
     #endregion
 
     //public GameObject textCanvas;
@@ -30,7 +31,6 @@ public class PlayerController : MonoBehaviour {
 		floorMask = LayerMask.GetMask ("Floor");
 		rigid = GetComponent<Rigidbody> ();
         //textDisplay = textCanvas.GetComponent<DisplayText> ();
-        Cursor.visible = false;
 	}
 	
 	// Update is called once per frame
@@ -39,8 +39,13 @@ public class PlayerController : MonoBehaviour {
 		float v = Input.GetAxisRaw ("Vertical");
         mouseDelta.x = Input.GetAxisRaw("Mouse X");
         mouseDelta.y = Input.GetAxisRaw("Mouse Y");
-		Move (h, v);
-		Turn ();
+
+        Cursor.visible = Paused;
+        if (!Paused)
+        {
+            Move(h, v);
+            Turn();
+        }
 	}
 
 	void Move(float h, float v)

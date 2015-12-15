@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
 using UnityEngine;
 
 
@@ -13,7 +10,7 @@ class MazeGenerator
     public MazeNode[,] Nodes;
 
     [SerializeField]
-    float MeanderRate = 1f;
+    float MeanderRate = 0.5f;
 
     int maxWidth;
     int maxHeight;
@@ -24,8 +21,9 @@ class MazeGenerator
     List<MazeNode> NewFringe;
     MazeNode PlayerNode;
     //const int maxTurns = 3;
-    const int minTurns = 3;
-    const float expansionProbability = 0.25f;
+    const int minTurns = 2;
+    const float expansionProbability = 0.30f;
+    const float koolaidProbability = 0.01f;
 
     #region Constructor
     public MazeGenerator(int width, int height)
@@ -86,14 +84,14 @@ class MazeGenerator
         BFSq.Enqueue(PlayerNode);
         
         // Initialize the relevant BFS nodes
-        int radius = 15;
+        int radius = 20;
         for (int i = Math.Max(0, playerPos[0] - radius); i < Math.Min(playerPos[0] + radius, maxWidth); i++)
             for (int j = Math.Max(0, playerPos[1] - radius); j < Math.Min(playerPos[1] + radius, maxHeight); j++)
             {
                 Nodes[i, j].Color = 0;
                 Nodes[i, j].NPathsOut = 0;
-                //Nodes[i, j].Previous = null;
                 Nodes[i, j].Distance = int.MaxValue;
+                Nodes[i, j].Previous = null;
             }
 
         PlayerNode.Distance = 0;
@@ -104,11 +102,12 @@ class MazeGenerator
         while(BFSq.Count > 0)
         {
             MazeNode node = BFSq.Dequeue();
+            if(node.Distance == int.MaxValue)
+                throw new MazeGameException("Error in distance calc. d:" + node.Distance);
 
             // Stop at nodes outside of the expansion range.
-            // Also, do not expand nodes too close that can be seen.
             int nTurns = CountTurns(node);
-            if(nTurns >= minTurns)
+            if(nTurns >= minTurns || (nTurns >= 1 && node.Distance > 2))
             {
                 foreach (var adj in node.GetAdjacent())
                 {
@@ -117,6 +116,9 @@ class MazeGenerator
                         node.Value = 1;
                         node.NPathsOut++;
                         BFSq.Enqueue(adj);
+                        adj.Distance = Math.Min(node.Distance + 1, adj.Distance);
+                        if (adj.Distance == int.MaxValue)
+                            throw new MazeGameException("Node was added with max distance");
                         adj.Previous = node;
                         adj.Color = 1;
                         adj.Value = 2;
@@ -147,8 +149,9 @@ class MazeGenerator
                 }
             }
 
+            // Also, do not expand nodes too close that can be seen.
             // If it already has paths connected and is close, skip expanding through walls.
-            if (node.NPathsOut >= 1 && nTurns <= 2)
+            if (node.NPathsOut >= 1 && nTurns < minTurns-1)
                 continue;
 
             int availableNodes = 0;
@@ -163,7 +166,7 @@ class MazeGenerator
                     disconnected.Remove(dis);
                     if (dis.Color == 0 && dis.Value == 0)
                     {
-                        if (KUtils.rand.NextDouble() > 1 - expansionProbability)
+                        if (KUtils.rand.NextDouble() < expansionProbability)
                         {
                             node.Connect(dis);
                             dis.Color = 1;
@@ -191,7 +194,8 @@ class MazeGenerator
         while(FringeNodes.Count > 0)
         {
             MazeNode tailNode = FringeNodes.Dequeue();
-            if (tailNode.NPathsOut == 0 && CountTurns(tailNode) > minTurns)
+            int nTurns = CountTurns(tailNode);
+            if (tailNode.NPathsOut == 0 && (nTurns > minTurns || (nTurns > 1 && tailNode.Distance > 2)))
             {
                 tailNode.Value = 1;
                 tailNode.Previous.NPathsOut--;
@@ -331,7 +335,10 @@ class MazeGenerator
         // Clear all previous nodes.
         for (int i = 0; i < maxWidth; i++)
             for (int j = 0; j < maxHeight; j++)
-                Nodes[i,j].Previous = null;
+            {
+                Nodes[i, j].Value = 0;
+                Nodes[i, j].Previous = null;
+            }
         SaveState();
     }
 

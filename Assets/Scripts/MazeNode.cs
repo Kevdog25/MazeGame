@@ -12,10 +12,12 @@ public class MazeNode
     OnValueChange onValueChange;
     public OnPreviousChange onPreviousChange;
     int defaultValue;
+
     List<MazeNode> defaultAdj;
     List<MazeNode> defaultDis;
     List<MazeNode> Adjacent;
     List<MazeNode> Disconnected;
+
     public int Distance;
     int color;
     public int Color
