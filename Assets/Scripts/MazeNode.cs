@@ -18,7 +18,8 @@ public class MazeNode
     List<MazeNode> Adjacent;
     List<MazeNode> Disconnected;
 
-    public int Distance;
+    public int DistanceSinceTurn;
+    public int NMovesAway;
     int color;
     public int Color
     {
@@ -157,7 +158,8 @@ public class MazeNode
         Value = defaultValue;
         Color = 0;
         NPathsOut = 0;
-        Distance = int.MaxValue;
+        DistanceSinceTurn = int.MaxValue;
+        NMovesAway = int.MaxValue;
         foreach (var node in defaultAdj)
             Connect(node);
         foreach (var node in defaultDis)
