@@ -20,12 +20,12 @@ class MazeGenerator
     List<MazeNode> CullList;
     List<MazeNode> NewFringe;
     MazeNode PlayerNode;
-    //const int maxTurns = 3;
-    const int minTurns = 2;
+    const int minMoves = 3;
+    const int maxCorridorLength = 2;
     const float expansionProbability = 0.30f;
-    const float koolaidProbability = 0.01f;
+    //const float koolaidProbability = 0.01f;
 
-    #region Constructor
+    #region Constructor 
     public MazeGenerator(int width, int height)
     {
         maxWidth = width;
@@ -90,11 +90,13 @@ class MazeGenerator
             {
                 Nodes[i, j].Color = 0;
                 Nodes[i, j].NPathsOut = 0;
-                Nodes[i, j].Distance = int.MaxValue;
+                Nodes[i, j].DistanceSinceTurn = int.MaxValue;
+                Nodes[i, j].NMovesAway = int.MaxValue;
                 Nodes[i, j].Previous = null;
             }
 
-        PlayerNode.Distance = 0;
+        PlayerNode.NMovesAway = 0;
+        PlayerNode.DistanceSinceTurn = 0;
         PlayerNode.Color = 1;
         PlayerNode.Value = 2;
 
@@ -102,26 +104,25 @@ class MazeGenerator
         while(BFSq.Count > 0)
         {
             MazeNode node = BFSq.Dequeue();
-            if(node.Distance == int.MaxValue)
-                throw new MazeGameException("Error in distance calc. d:" + node.Distance);
+            if(node.NMovesAway == int.MaxValue)
+                throw new MazeGameException("Error in distance calc. d:" + node.NMovesAway);
 
             // Stop at nodes outside of the expansion range.
-            int nTurns = CountTurns(node);
-            if(nTurns >= minTurns || (nTurns >= 1 && node.Distance > 2))
+            if(node.NMovesAway >= minMoves)
             {
                 foreach (var adj in node.GetAdjacent())
                 {
                     if (adj.Color == 0 && adj.Value > 0)
                     {
-                        node.Value = 1;
-                        node.NPathsOut++;
-                        BFSq.Enqueue(adj);
-                        adj.Distance = Math.Min(node.Distance + 1, adj.Distance);
-                        if (adj.Distance == int.MaxValue)
-                            throw new MazeGameException("Node was added with max distance");
-                        adj.Previous = node;
-                        adj.Color = 1;
-                        adj.Value = 2;
+                        if (TryUpdateDistance(node, adj))
+                        {
+                            node.Value = 1;
+                            node.NPathsOut++;
+                            BFSq.Enqueue(adj);
+                            adj.Previous = node;
+                            adj.Color = 1;
+                            adj.Value = 2;
+                        }
                     }
                 }
                 if (node.Value == 2)
@@ -135,25 +136,29 @@ class MazeGenerator
 
             foreach (var adj in node.GetAdjacent())
             {
-                if(adj.Distance > node.Distance + 1)
+                if(TryUpdateDistance(node,adj))
                 {
-                    adj.Distance = node.Distance + 1;
+                    // We now should shift adj from its previous path onto this new one.
+                    if (adj.Previous != null)
+                    {
+                        adj.Previous.NPathsOut--;
+                        if (adj.Previous.NPathsOut < 0)
+                            throw new MazeGameException("Reduced the number of paths out to < 0.");
+                    }
+                    
                     adj.Previous = node;
                     node.NPathsOut++;
-                    if (adj.Color == 0)
-                    {
-                        BFSq.Enqueue(adj);
-                        adj.Color = 1;
-                        adj.Value = 2;
-                    }
+                    BFSq.Enqueue(adj);
+                    adj.Color = 1;
+                    adj.Value = 2;
                 }
             }
 
             // Also, do not expand nodes too close that can be seen.
             // If it already has paths connected and is close, skip expanding through walls.
-            if (node.NPathsOut >= 1 && nTurns < minTurns-1)
+            if (node.NMovesAway == 0)
                 continue;
-
+            Vector2 currentDir = (node.Position - node.Previous.Position).normalized;
             int availableNodes = 0;
             List<MazeNode> disconnected;
             do
@@ -164,6 +169,14 @@ class MazeGenerator
                 {
                     MazeNode dis = disconnected[KUtils.rand.Next(disconnected.Count)];
                     disconnected.Remove(dis);
+
+                    // Enforce that there are no corridors longer than the max length (actually 2* that since they can expand in both directions)
+                    if (node.DistanceSinceTurn >= maxCorridorLength) {
+                        Vector2 NtoD = (dis.Position - node.Position).normalized;
+                        if (Math.Abs(Vector2.Dot(NtoD,currentDir)-1) < 0.5f)
+                            continue;
+                    }
+
                     if (dis.Color == 0 && dis.Value == 0)
                     {
                         if (KUtils.rand.NextDouble() < expansionProbability)
@@ -172,7 +185,7 @@ class MazeGenerator
                             dis.Color = 1;
                             dis.Value = 2;
                             dis.Previous = node;
-                            dis.Distance = node.Distance + 1;
+                            TryUpdateDistance(node, dis);
                             BFSq.Enqueue(dis);
                             node.NPathsOut++;
                         }
@@ -194,10 +207,12 @@ class MazeGenerator
         while(FringeNodes.Count > 0)
         {
             MazeNode tailNode = FringeNodes.Dequeue();
-            int nTurns = CountTurns(tailNode);
-            if (tailNode.NPathsOut == 0 && (nTurns > minTurns || (nTurns > 1 && tailNode.Distance > 2)))
+            // The grow algorithm sucks and sometimes puts a single node multiple times.
+            if (tailNode.Previous == null)
+                continue;
+            //int nTurns = CountTurns(tailNode);
+            if (tailNode.NPathsOut == 0 && tailNode.NMovesAway > minMoves+1 && tailNode.Previous.NMovesAway != 0)
             {
-                tailNode.Value = 1;
                 tailNode.Previous.NPathsOut--;
                 foreach (var node in tailNode.GetAdjacent())
                 {
@@ -210,8 +225,6 @@ class MazeGenerator
                 tailNode.Reset();
             }
         }
-        //foreach (var node in CullList)
-        //    FringeNodes.Enqueue(node);
     }
 
     /// <summary>
@@ -266,7 +279,6 @@ class MazeGenerator
         PlayerNode = Nodes[playerPos[0], playerPos[1]];
         GenerateFixedPath(start, end);
         Nodes[start[0], start[1]].Value = 2;
-        FringeNodes.Enqueue(Nodes[start[0], start[1]]);
         GrowPaths();
     }
 
@@ -386,5 +398,48 @@ class MazeGenerator
         for (int i = 0; i < maxWidth; i++)
             for (int j = 0; j < maxHeight; j++)
                 Nodes[i, j].SaveState();
+    }
+
+    /// <summary>
+    /// Makes a guess about the smallest value of n2.Distance based on
+    /// the connection to n1.
+    /// </summary>
+    /// <param name="n1"></param>
+    /// <param name="n2"></param>
+    /// <returns></returns>
+    bool TryUpdateDistance(MazeNode n1, MazeNode n2)
+    {
+        // If there cant be a turn yet then n2 is just as accessible as n1.
+        if (n1.Previous == null)
+        {
+            if (n2.NMovesAway > n1.NMovesAway)
+            {
+                n2.DistanceSinceTurn = 1;
+                n2.NMovesAway = n1.NMovesAway;
+                return true;
+            }
+            else
+                return false;
+        }
+        // If there happens to not be a turn, then n2 is still just as accessible as n1.
+        if ((int)Math.Round((n1.Previous.Position - n2.Position).magnitude) == 2)
+        {
+            if(n2.NMovesAway > n1.NMovesAway)
+            {
+                n2.DistanceSinceTurn = n1.DistanceSinceTurn + 1;
+                n2.NMovesAway = n1.NMovesAway;
+                return true;
+            }
+            return false;
+        }
+        // Else there must be a turn
+        if (n2.NMovesAway > n1.NMovesAway + 1)
+        {
+            n2.DistanceSinceTurn = 1;
+            n2.NMovesAway = n1.NMovesAway + n1.DistanceSinceTurn;
+            return true;
+        }
+        else
+            return false;
     }
 }
